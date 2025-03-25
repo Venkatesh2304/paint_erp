@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=A4, initial-scale=1.0">
+    <title>Invoice</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .invoice-box {
+            max-width: 800px;
+            padding: 20px;
+            border: 1px solid #eee;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
+        }
+
+        @page {
+            size: A4;
+            margin: 5mm;
+        }
+
+        .title {
+            font-size: 24px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .info-table,
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            min-height: 200px;
+        }
+
+        .info-table td,
+        .items-table td,
+        .items-table th {
+            padding: 5px;
+            padding-top : 7px ; 
+            padding-bottom : 7px ; 
+            border-right: 1px solid;
+            border-left: 1px solid;
+            font-size: 14px ;
+        }
+
+        .items-table th {
+            text-align: left;
+        }
+
+        .total {
+            text-align: right;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="invoice-box">
+        <div class="title">DEVAKI PAINTS & HARDWARES </div>
+        <div style="margin-top:5px ; font-size:15px ; text-align: center; display: flex; flex-direction: column; gap: 2px;"> 
+        <div>No: 13/3 Chella Krishna Towers,</div>
+        <div>KARUR BYE PASS ROAD,</div>
+        <div>TRICHY - 620002</div>
+        <div>Phone : 9944140106 , Email : devakipaints@gmail.com</div>
+        <div>GSTIN: 33DLDPK2509B1ZR , State : 33-Tamil Nadu</div>
+        </div>
+        <div style="margin-top:10px ; border:1px solid ; display: flex; width:100%;  "> 
+            <div style="width:50%; border-right:1px solid ; padding-left: 10px; padding-top:2px; padding-bottom: 2px;">
+                <b>{{ customer_name }}</b></br></br>
+                {{ customer_address }}
+                </br></br>
+                <b>Phone:</b> {{ customer_phone }}
+            </div>
+            <div style="width:50%; padding-left: 10px; padding-top:2px; padding-bottom: 2px;">
+                Invoice No :  {{ invoice_no }}</br></br></br></br>
+                Date :  {{ date }}</br></br>
+                Gstin :  {{party_gstin}}
+            </div>
+        </div>
+
+      
+        <table class="items-table">
+            <tr style="border: 1px solid;">
+                <th>#</th>
+                <th>Item Name</th>
+                <th>HSN / SAC</th>
+                <th>Quantity</th>
+                <th>Unit Price</th>
+                <th>GST</th>
+                <th>Amount</th>
+            </tr>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.no  }}</td>
+                <td><b>{{ item.name }}</b></td>
+                <td>{{ item.hsn }}</td>
+                <td>{{ item.qty }}</td>
+                <td>{{ item.price }}</td>
+                <td>{{ item.gst }}</td>
+                <td>{{ item.amount }}</td>
+            </tr>
+            {% endfor %}
+            <tr style="border: 1px solid;">
+                <td></td>
+                <td><b>Total</b></td>
+                <td></td>
+                <td>{{ total_qty }}</td>
+                <td></td>
+                <td>₹ {{ total_gst }}</td>
+                <td>₹ {{ total_amt }}</td>
+            </tr>
+        </table>
+        <div style="display: flex;flex-direction:row;margin-top: 20px;">
+            <table style="width:50%">
+                <thead style="text-align: left;">
+                    <th style="font-weight: normal;">Taxable</th>
+                    <th style="font-weight: normal;">Rate</th>
+                    <th style="font-weight: normal;">CGST</th>
+                    <th style="font-weight: normal;">SGST</th>
+                </thead>
+                <tr>
+                    {% for tax in taxes %}
+                    <td>₹ {{ tax.taxable }}</td>
+                    <td>{{ tax.rate }}%</td>
+                    <td>₹ {{ tax.cgst }}</td>
+                    <td>₹ {{ tax.sgst }}</td>
+                    {% endfor %}
+                </tr>
+            </table>
+            <div class="total" style="width:40% ; justify-self:flex-end;">Total Amount : ₹ {{ total_amt }}</div>
+        </div>
+        <div style="display: flex;flex-direction:row;margin-top: 20px;border: 1px solid;">
+            <div style="padding:5px; width:40%; border-right: 1px solid;">
+                <b>Bank Details</b> </br></br>
+                Name : Karur Vysya Bank , Trichy  </br>
+                West Bouliward Road Branch </br> </br>
+                A/C No : 1816135000011758 </br></br>
+                IFSC : KVBL0001816 
+            </div>
+            <div style="padding:5px; width:30%; border-right: 1px solid;">
+                 <b>Terms & Conditions</b> </br></br>
+                 Subject to Trichy Jurisdiction </br>
+            </div>
+            <div style="padding:0px; width:30%; padding-top:15px;text-align: center;">
+                For DEVAKI PAINTS & </br> HARDWARES </br></br></br></br>
+                Authorized Signatory
+            </div>
+        </div>
+
+
+    </div>
+    
+</body>
+
+</html>
