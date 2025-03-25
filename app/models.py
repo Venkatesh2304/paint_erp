@@ -13,7 +13,7 @@ class Product(models.Model):
     category = models.CharField(max_length=100)
     base = models.CharField(max_length=100,null=True,blank=True)
     size = models.CharField(max_length=100)
-    dpl = models.IntegerField(null=True,blank=True)
+    dpl = models.IntegerField(db_default = 0 , default=0)
     mrp = models.IntegerField()
     opening_stock = models.IntegerField(default=0)
     hsn = models.CharField(max_length=100)
@@ -35,9 +35,11 @@ class Product(models.Model):
 class Customer(models.Model):
     name = models.CharField(max_length=100, primary_key=True)
     gstin = models.CharField(max_length=100,null=True,blank=True)
-    phone = models.CharField(max_length=100)
+    phone = models.CharField(max_length=100,null=True,blank=True)
     address = models.TextField()
-    opening_balance = models.FloatField(default=0)
+    city = models.CharField(max_length=100,default = "Trichy",db_default="Trichy")
+    pincode = models.CharField(max_length=100,default = "620001",db_default="620001")
+    opening_balance = models.FloatField(default=0,db_default=0)
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
@@ -92,6 +94,7 @@ class SaleProduct(models.Model):
     product = models.ForeignKey(Product, on_delete=models.DO_NOTHING,related_name="sales")
     qty = models.IntegerField()
     price = models.FloatField(verbose_name="Sale Price / Unit")
+    color = models.CharField(max_length=100,verbose_name="Color",null=True,blank=True)
     
     
 
@@ -155,7 +158,7 @@ class Collection(models.Model):
         Outstanding.update()
 
 # CollectionEntry : bill_no , date
-class CollectionBillEntry(models.Model):    
+class CollectionBillEntry(models.Model):     
     collection = models.ForeignKey("app.Collection", on_delete=models.CASCADE)
     bill = models.ForeignKey(Sale, on_delete=models.DO_NOTHING,verbose_name="Sales Bill No")
     amt = models.FloatField(verbose_name="Amount Collected")

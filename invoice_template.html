@@ -65,6 +65,7 @@
 
 <body>
     <div class="invoice-box">
+        <div style="text-align: center; margin-bottom:2px ;"> Tax Invoice </div>
         <div class="title">DEVAKI PAINTS & HARDWARES </div>
         <div style="margin-top:5px ; font-size:15px ; text-align: center; display: flex; flex-direction: column; gap: 2px;"> 
         <div>No: 13/3 Chella Krishna Towers,</div>
@@ -76,12 +77,12 @@
         <div style="margin-top:10px ; border:1px solid ; display: flex; width:100%;  "> 
             <div style="width:50%; border-right:1px solid ; padding-left: 10px; padding-top:2px; padding-bottom: 2px;">
                 <b>{{ customer_name }}</b></br></br>
-                {{ customer_address }}
-                </br></br>
+                {{ customer_address }} - {{ customer_pincode }}
+                </br>
                 <b>Phone:</b> {{ customer_phone }}
             </div>
             <div style="width:50%; padding-left: 10px; padding-top:2px; padding-bottom: 2px;">
-                Invoice No :  {{ invoice_no }}</br></br></br></br>
+                Invoice No :  {{ invoice_no }}</br></br>
                 Date :  {{ date }}</br></br>
                 Gstin :  {{party_gstin}}
             </div>
@@ -92,30 +93,62 @@
             <tr style="border: 1px solid;">
                 <th>#</th>
                 <th>Item Name</th>
+                <th>Code</th>
                 <th>HSN / SAC</th>
-                <th>Quantity</th>
+                <th>Qty</th>
                 <th>Unit Price</th>
-                <th>GST</th>
                 <th>Amount</th>
             </tr>
             {% for item in items %}
             <tr>
                 <td>{{ item.no  }}</td>
                 <td><b>{{ item.name }}</b></td>
+                <td>{{item.colour_code }}</td>
                 <td>{{ item.hsn }}</td>
                 <td>{{ item.qty }}</td>
                 <td>{{ item.price }}</td>
-                <td>{{ item.gst }}</td>
                 <td>{{ item.amount }}</td>
             </tr>
             {% endfor %}
+            
+            <tr>
+                <td></td>
+                <td style="text-align:right"><b>CGST</b></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td>₹ {{ total_cgst }}</td>
+            </tr>
+
+            <tr>
+                <td></td>
+                <td style="text-align:right"><b>SGST</b></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td>₹ {{ total_sgst }}</td>
+            </tr>
+
+            <tr>
+                <td></td>
+                <td style="text-align:right"><b>RoundOff</b></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td>₹ {{ round_off }}</td>
+            </tr>
+
+
             <tr style="border: 1px solid;">
                 <td></td>
-                <td><b>Total</b></td>
+                <td style="text-align:right"><b>Total</b></td>
+                <td></td>
                 <td></td>
                 <td>{{ total_qty }}</td>
                 <td></td>
-                <td>₹ {{ total_gst }}</td>
                 <td>₹ {{ total_amt }}</td>
             </tr>
         </table>

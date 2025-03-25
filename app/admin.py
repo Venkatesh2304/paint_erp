@@ -110,7 +110,7 @@ class SaleProductInline(admin.TabularInline):
         dpl = forms.FloatField(label="DPL",required=False,disabled=True)
         margin = forms.FloatField(label="Margin",required=False,disabled=False,initial=0)
         class Meta:
-            fields = ["product","dpl","margin","price","qty"]
+            fields = ["product","dpl","margin","price","qty","color"]
             widgets = {
                 'product': dal.autocomplete.ModelSelect2(url='/app/product/product-autocomplete/') ,  
             }
@@ -193,6 +193,7 @@ class SaleAdmin(CustomAdminModel,NoDeleteAction,NoSelectActions):
     actions = ["download_filtered_report"]
     empty_actions = ["download_filtered_report"]
     group = "Billing" 
+    autocomplete_fields = ['customer']
 
 
     def download_invoice(self,request, bill_no):
@@ -214,12 +215,12 @@ class SaleAdmin(CustomAdminModel,NoDeleteAction,NoSelectActions):
             "due_date": (sale.date + datetime.timedelta(days=28)).strftime("%d %b %Y"),
             "customer_name": sale.customer.name.upper(),
             "customer_address": sale.customer.address,
+            "customer_pincode": sale.customer.pincode,
             "party_gstin" : sale.customer.gstin or "-" , 
             "items": [
                 {"no" : idx+1 , "name": sp.product.name, "hsn": sp.product.hsn, "qty": sp.qty, 
-                 "price": "₹ " + str(round(sp.price,2)), 
-                 "gst": "₹ " + str(round(sp.qty * sp.product.rt * sp.price / 100,2)) , 
-                 "amount": "₹ " + str(round(sp.qty * sp.price * (1 + sp.product.rt/100),2)) }
+                 "price": "₹ " + str(round(sp.price,2)), "colour_code" :  sp.color or "" , 
+                 "amount": "₹ " + str(round(sp.qty * sp.price,2)) }
                 for idx,sp in enumerate(sale.products.all()) 
             ] + [{"name":"","hsn":"","qty":"","price":"","gst":"","amount":""}] * 3 ,
             "taxes" : [
@@ -228,7 +229,10 @@ class SaleAdmin(CustomAdminModel,NoDeleteAction,NoSelectActions):
             ],
             "total":  round(total_amt) , 
             "total_gst" : round(total_gst,2) , 
+            "total_cgst" : round(total_gst/2,2) , 
+            "total_sgst" : round(total_gst/2,2) , 
             "total_amt" : round(total_amt) , 
+            "round_off" : round(round(total_amt) - total_amt,2) ,
             "total_qty" : total_qty ,
         }
         
@@ -298,9 +302,11 @@ class OutstandingAdmin(ModelPermission,CustomAdminModel,NoSelectActions):
         df = pd.read_sql(f"select * from app_outstanding",connection)
         df["days"] =  (pd.Timestamp.today().normalize() - pd.to_datetime(df["date"])).dt.days
         df["balance"] = -df["balance"].round()
+        df = df[["customer","bill_no","days","balance"]]
+        df.sort_values("days",inplace=True,ascending=False)
         df.loc["Total"] = df.sum(numeric_only=True)
-        df.loc["Total"]["days"] = ""
-        df.loc["Total"]["customer"] = "Total"
+        df.loc["Total","days"] = ""
+        df.loc["Total","bill_no"] = "Total"
         df.to_csv("outstanding.csv",index=False)
         response = HttpResponse(open("outstanding.csv"),content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="outstanding-{datetime.date.today()}.csv"'
