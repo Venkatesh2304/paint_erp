@@ -39,10 +39,16 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "app"
-]
+    "app",
+        'django_filters',
 
+    'rest_framework',
+        'corsheaders',
+
+]
+CORS_ALLOW_ALL_ORIGINS = True 
 MIDDLEWARE = [
+        'corsheaders.middleware.CorsMiddleware',  # Add this line
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -50,6 +56,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    'app.middleware.DelayResponseMiddleware'
 ]
 
 ROOT_URLCONF = "mysite.urls"
@@ -150,3 +157,16 @@ LOGGING = {
     },
 }
 LOGGING = {}
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "my_cache_table",
+    }
+}
+
+REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    'PAGE_SIZE': 10,
+        'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend']
+}

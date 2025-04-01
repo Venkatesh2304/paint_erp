@@ -19,6 +19,9 @@ class Product(models.Model):
     hsn = models.CharField(max_length=100)
     rt = models.FloatField()
     
+    def closing_stock(self) : 
+        return self.opening_stock - sum([ sale.qty for sale in self.sales.all() ]) + sum([ pur.qty for pur in self.purchase.all() ])
+
     def save(self, *args, **kwargs):
         self.category = self.category.upper()
         self.base = (self.base or "").upper()
@@ -26,6 +29,9 @@ class Product(models.Model):
         self.name = f"{self.category} {self.base} {self.size}"
         return super().save(*args, **kwargs)
 
+    def can_delete(self) :
+        return (not self.sales.exists()) and (not self.purchase.exists())
+    
     def __str__(self):
         return self.name
     
@@ -52,8 +58,8 @@ class Customer(models.Model):
 class Supplier(models.Model):
     name = models.CharField(max_length=100, primary_key=True)
     gstin = models.CharField(max_length=100,null=True,blank=True)
-    phone = models.CharField(max_length=100)
-    address = models.TextField()
+    phone = models.CharField(max_length=100,null=True,blank=True)
+    address = models.TextField(null=True,blank=True)
 
     def __str__(self):
         return self.name
@@ -64,13 +70,14 @@ class Sale(models.Model):
     date = models.DateField(default=datetime.date.today)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
     amt = models.FloatField(null=True,verbose_name="Total Bill Value")
+    discount = models.IntegerField(default=0,verbose_name="Discount",db_default=0)
 
     @staticmethod 
     def monthly_sales_total() : 
         return round(Sale.objects.filter(date__month=datetime.date.today().month).aggregate(models.Sum('amt'))['amt__sum'] or 0)
         
     def save(self, *args, **kwargs):
-        if not self.bill_no:  # Generate only if not already set
+        if (not self.bill_no) or (self.bill_no == "TEMPORARY"):  # Generate only if not already set
             last_bill = Sale.objects.order_by('-bill_no').first()
             if last_bill:
                 last_number = int(last_bill.bill_no[1:])  # Extract number part
@@ -88,13 +95,57 @@ class Sale(models.Model):
     def __str__(self):
         return str(self.bill_no)
     
+    def einv_dict(self) : 
+        return {
+        "Version": "1.1",
+        "TranDtls": {
+            "TaxSch": "GST",
+            "SupTyp": "B2B"
+        },
+        "DocDtls": {
+            "Typ": "INV",
+            "No": self.bill_no,
+            "Dt": self.date.strftime("%d/%m/%Y")
+        },
+        "BuyerDtls": {
+            "Gstin": self.customer.gstin ,
+            "LglNm": self.customer.name ,
+            "Pos": "33",
+            "Addr1": self.customer.address,
+            "Pin": self.customer.pincode ,
+            "Loc": self.customer.city.capitalize() ,
+            "Stcd": "33"
+        },
+        "ValDtls": {
+            "AssVal": round(sum([item.price * item.qty for item in self.products.all()]),2) ,
+            "TotInvVal": self.amt
+        },
+        "ItemList": [
+            {
+                "IsServc": "N",
+                "HsnCd": item.product.hsn ,
+                "Qty": item.qty,
+                "Unit": "NOS",
+                "UnitPrice": round(item.price,2) ,
+                "TotAmt": round(item.price*item.qty*(1+item.product.rt/100),2),
+                "Discount": 0,
+                "AssAmt": round(item.price*item.qty,2),
+                "GstRt": round(item.product.rt,1),
+                "CgstAmt": round(item.price*item.qty*item.product.rt/200,2) ,
+                "SgstAmt": round(item.price*item.qty*item.product.rt/200,2) ,
+                "TotItemVal": round(item.price*item.qty*(1+item.product.rt/100),2),
+                "SlNo": str(idx+1) 
+            } for idx,item in enumerate(self.products.all())
+        ],
+}
+
 # SaleProduct : sale , product , qty , price
 class SaleProduct(models.Model):
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE,related_name="products")
     product = models.ForeignKey(Product, on_delete=models.DO_NOTHING,related_name="sales")
     qty = models.IntegerField()
     price = models.FloatField(verbose_name="Sale Price / Unit")
-    color = models.CharField(max_length=100,verbose_name="Color",null=True,blank=True)
+    color = models.IntegerField(verbose_name="Color",null=True,blank=True)
     
     
 
@@ -122,7 +173,7 @@ class PurchaseProduct(models.Model):
     qty = models.IntegerField()
     base_rate = models.FloatField(verbose_name="Base Rate / Unit")
     discount = models.FloatField(verbose_name="Total Discount")
-    price = models.FloatField(verbose_name="Purchase Price / Unit")
+    price = models.FloatField(verbose_name="Purchase Price / Unit",null=True,blank=True)
     
     def save(self, *args, **kwargs):
         self.price = self.base_rate - (self.discount/self.qty) 
@@ -159,7 +210,7 @@ class Collection(models.Model):
 
 # CollectionEntry : bill_no , date
 class CollectionBillEntry(models.Model):     
-    collection = models.ForeignKey("app.Collection", on_delete=models.CASCADE)
+    collection = models.ForeignKey("app.Collection", on_delete=models.CASCADE,related_name="bills")
     bill = models.ForeignKey(Sale, on_delete=models.DO_NOTHING,verbose_name="Sales Bill No")
     amt = models.FloatField(verbose_name="Amount Collected")
     def save(self, *args, **kwargs):
