@@ -38,4 +38,6 @@ urlpatterns = [
         path('', include(router.urls)),
         path('invoice/<str:bill>', download_invoice),
         path('report/', report),
+        path('dashboard/', dashboard),
+        path('product_helper/', product_helper),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

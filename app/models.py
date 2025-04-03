@@ -85,9 +85,11 @@ class Sale(models.Model):
             else:
                 new_number = "S00001"  # First bill case
             self.bill_no = new_number
+            
         super().save(*args, **kwargs)
         Outstanding.update()
      
+
     def delete(self,*args, **kwargs):
         super().delete(*args, **kwargs)
         Outstanding.update()
@@ -192,6 +194,7 @@ class Collection(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.DO_NOTHING)
     mode = models.CharField(max_length=100,choices=[("Cash","Cash"),("Cheque","Cheque"),("UPI","UPI")])
     amt = models.FloatField(verbose_name="Total Collection")
+    discount = models.FloatField(default=0,verbose_name="Discount",db_default=0)
 
     @staticmethod 
     def monthly_coll_total() : 
@@ -245,7 +248,6 @@ class Outstanding(models.Model) :
                 ) 
                 GROUP BY customer_id , bill_no 
                 HAVING ABS(SUM(amt)) > 1 
-                
             ''')
       
       class Meta : 

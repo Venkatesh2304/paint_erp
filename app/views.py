@@ -1,5 +1,5 @@
 from collections import defaultdict
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.urls import path
 import django_filters
@@ -16,28 +16,15 @@ from django.core.cache import cache
 from django.utils.http import quote_etag
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.filters import OrderingFilter
 
 #Create a listview for the sales
 from rest_framework import generics
 from .models import * 
 from django.db.models import Sum,F
 from django.db.models.functions import Coalesce
+from rest_framework.exceptions import ValidationError
 
-class OutstandingListView(viewsets.ModelViewSet):
-    class Filter(django_filters.FilterSet):
-        class Meta:
-            model = Outstanding
-            fields = '__all__'
-            
-    filter_backends = (DjangoFilterBackend,)
-    filterset_class = Filter
-    queryset = Outstanding.objects.all()
-    serializer_class = OutstandingSerializer
-    pagination_class = None 
-
-class CollectionListView(viewsets.ModelViewSet):
-    queryset = Collection.objects.all()
-    serializer_class = CollectionSerializer
 
 class SupplierListView(viewsets.ModelViewSet):
     queryset = Supplier.objects.all()
@@ -66,20 +53,12 @@ class ProductNameListView(viewsets.ModelViewSet):
 
 
 class ProductListView(viewsets.ModelViewSet):
-    
-    class Filter(django_filters.FilterSet):
-        name = django_filters.CharFilter(lookup_expr='icontains')
-        class Meta:
-            model = Product
-            fields = '__all__'
-            
-    filter_backends = (DjangoFilterBackend,)
-    filterset_class = Filter
-
-
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     lookup_value_regex = '[^/]+'
+    filter_backends = (DjangoFilterBackend,OrderingFilter)
+    filterset_fields = { "name" : ["icontains"] }
+    order_by = "__all__"
     
 
     def perform_destroy(self, instance):
@@ -100,29 +79,60 @@ class ProductListView(viewsets.ModelViewSet):
     #     return quote_etag(etag)
 
 class PurchaseListView(viewsets.ModelViewSet):
-    class Filter(django_filters.FilterSet):
-        bill_no = django_filters.CharFilter(lookup_expr='icontains')
-        class Meta:
-            model = Purchase
-            fields = '__all__'
-    filter_backends = (DjangoFilterBackend,)
-    filterset_class = Filter
-
     queryset = Purchase.objects.all()
     serializer_class = PurchaseSerializer
-
+    filter_backends = (DjangoFilterBackend,OrderingFilter)
+    filterset_fields = {"bill_no" : ["exact","icontains"],"supplier__name" : ["icontains"],"date":["exact","gte","lte"]}
+    order_by = "__all__"
+    ordering = ['-date','-bill_no']
 
 class SalesListView(viewsets.ModelViewSet):
-    class Filter(django_filters.FilterSet):
-        bill_no = django_filters.CharFilter(lookup_expr='icontains')
-        class Meta:
-            model = Sale
-            fields = '__all__'
-    filter_backends = (DjangoFilterBackend,)
-    filterset_class = Filter
-
     queryset = Sale.objects.all()
     serializer_class = SalesSerializer
+    filter_backends = (DjangoFilterBackend,OrderingFilter)
+    filterset_fields = {"bill_no" : ["exact","icontains"],"customer__name" : ["icontains"],"date":["exact","gte","lte"]}
+    order_by = "__all__"
+    ordering = ['-date','-bill_no']
+
+    def perform_create(self, serializer):
+        res = super().perform_create(serializer)
+        self.custom_validate(serializer)
+        return res
+    
+    def perform_update(self, serializer):
+        res = super().perform_update(serializer)
+        self.custom_validate(serializer)
+        return res
+    
+    def custom_validate(self,serializer) : 
+        products = SaleProduct.objects.filter(sale_id=serializer.instance.bill_no)
+        idx = 0
+        errs = [{}] * len(products)
+        for product in products.all():
+            if product.product.closing_stock() : 
+                Sale.objects.get(bill_no = serializer.instance.bill_no).delete()
+                # errs[idx] = {"qty" : "Stock Not Available"}
+                raise ValidationError({'detail': f"Stock Not Available {product.product.name}"})
+            idx += 1
+
+    
+class OutstandingListView(viewsets.ModelViewSet):
+    queryset = Outstanding.objects.all()
+    serializer_class = OutstandingSerializer
+    pagination_class = None
+    filter_backends = (DjangoFilterBackend,OrderingFilter)
+    filterset_fields = {"customer" : ["exact"],"date":["exact","gte","lte"]}
+    order_by = "__all__"
+    ordering = ['date']
+
+class CollectionListView(viewsets.ModelViewSet):
+    queryset = Collection.objects.all()
+    serializer_class = CollectionSerializer
+    filter_backends = (DjangoFilterBackend,OrderingFilter)
+    order_by = "__all__"
+    ordering = ['-id']
+    filterset_fields = {"date" : ["exact"],"mode" : ["exact"],"customer__name" : ["icontains"],"id":["exact"]}
+
 
 
 def download_invoice(request,bill) :
@@ -132,11 +142,14 @@ def download_invoice(request,bill) :
     total_amt = 0
     total_qty = 0
     total_gst = 0
+    total_taxable = 0 
     for sp in sale.products.all() :
         taxes[sp.product.rt] += sp.qty * sp.price 
+        total_taxable += sp.qty * sp.price
         total_amt += sp.qty * sp.price * (1 + sp.product.rt/100)
         total_qty += sp.qty
         total_gst += sp.qty * sp.product.rt * sp.price / 100
+    total_amt -= sale.discount
     
     invoice_data = {
         "invoice_no": sale.bill_no,
@@ -160,6 +173,8 @@ def download_invoice(request,bill) :
         "total_gst" : round(total_gst,2) , 
         "total_cgst" : round(total_gst/2,2) , 
         "total_sgst" : round(total_gst/2,2) , 
+        "total_taxable" : round(total_taxable,2) , 
+        "total_discount" : round(sale.discount) ,
         "total_amt" : round(total_amt) , 
         "round_off" : round(round(total_amt) - total_amt,2) ,
         "total_qty" : total_qty ,
@@ -198,10 +213,12 @@ def report(request):
         day_wise = bills.groupby('date').agg({'amt':'sum'}).reset_index() if not bills.empty else pd.DataFrame()
         product_model = SaleProduct if type == 'sales' else PurchaseProduct
         bill_foriegn_key = 'sale' if type == 'sales' else 'purchase'
-        products = product_model.objects.all().filter( **({ f"{bill_foriegn_key}_id__in" :  bills.bill_no.values}) )
-        products = pd.DataFrame(list(products.values()))
-        if not products.empty:
+        if not bills.empty :
+            products = product_model.objects.all().filter( **({ f"{bill_foriegn_key}_id__in" :  bills.bill_no.values}) )  
+            products = pd.DataFrame(list(products.values()))
             products = products.groupby('product_id').agg({'qty':'sum','price':'mean'}).reset_index()
+        else : 
+            products = pd.DataFrame()
         with pd.ExcelWriter(f'{type}.xlsx') as writer:
             bills.round(2).to_excel(writer, sheet_name='bill_wise', index=False)
             day_wise.round(2).to_excel(writer, sheet_name='day_wise', index=False)
@@ -212,10 +229,13 @@ def report(request):
         day_wise = colls.pivot_table(index=["date"],columns=["mode"],values=["amt"]).reset_index() if not colls.empty else pd.DataFrame()
         day_wise.columns = [ col[len(col) - 1] if isinstance(col, tuple) else col for col in day_wise.columns.values]
 
-        bill_wise = CollectionBillEntry.objects.all().filter( **({ f"collection_id__in" :  colls.id.values}) )
-        bill_wise = pd.DataFrame(list(bill_wise.values()))
-        if not bill_wise.empty:
+        if not colls.empty:
+            bill_wise = CollectionBillEntry.objects.all().filter( **({ f"collection_id__in" :  colls.id.values}) )
+            bill_wise = pd.DataFrame(list(bill_wise.values()))
             bill_wise = bill_wise.groupby('bill_id').agg({'amt':'sum'}).reset_index()
+        else : 
+            bill_wise = pd.DataFrame()
+
         with pd.ExcelWriter(f'{type}.xlsx') as writer:
             colls.round(2).to_excel(writer, sheet_name='Party wise', index=False)
             day_wise.round(2).to_excel(writer, sheet_name='Day wise', index=False)
@@ -239,3 +259,64 @@ def report(request):
 
     return HttpResponse(open(f"{type}.xlsx","rb"),content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                         headers={'Content-Disposition': f'attachment; filename="{type}.xlsx"'})
+
+
+def dashboard(request) : 
+    
+    data = {"totals" : {},"month_wise" : {},"day_wise" : {}}
+
+    for [key,model] in [["sales",Sale],["purchase",Purchase]] :
+        queryset = model.objects.all()
+        queryset = queryset.filter(date__gte = datetime.datetime.now() - datetime.timedelta(days=150))
+        queryset = queryset.annotate(month = models.functions.TruncMonth('date'))
+        queryset = queryset.values('month').annotate(total = Sum('amt')).order_by('month')
+        queryset = pd.DataFrame(list(queryset)).rename(columns={"total" : key}).round()
+        queryset['month'] = pd.to_datetime(queryset['month'],format="%Y-%m-%d").dt.strftime('%b')
+        data["month_wise"][key] = queryset.to_dict('records')
+
+        #Get Day wise sales for the last 15 days 
+        queryset = model.objects.all()
+        queryset = queryset.filter(date__gte = datetime.datetime.now() - datetime.timedelta(days=15))
+        queryset = queryset.annotate(day = models.functions.TruncDay('date'))
+        queryset = queryset.values('day').annotate(total = Sum('amt')).order_by('day')
+        queryset = pd.DataFrame(list(queryset)).rename(columns={"total" : key}).round()
+        queryset['day'] = pd.to_datetime(queryset['day'],format="%Y-%m-%d").dt.strftime('%d')
+        data["day_wise"][key] = queryset.to_dict('records') 
+
+    def indian_format(number):
+        num_str = str(number)[::-1]  # Reverse string for easier processing
+        parts = [num_str[:3]] + [num_str[i:i+2] for i in range(3, len(num_str), 2)]
+        return ','.join(parts)[::-1] 
+
+    #Get the total sales for this month alone 
+    for [key,model] in [["sales",Sale],["purchase",Purchase],["collection",Collection]] :
+        queryset = model.objects.all()
+        queryset = queryset.filter(date__gte = datetime.datetime.now().replace(day=1))
+        queryset = queryset.aggregate(total = Sum('amt'))
+        data['totals'][key] = indian_format(round(queryset['total'] or 0))
+    
+    data["month"] = datetime.datetime.now().strftime("%b")
+    data['totals']['outstanding'] = round(-Outstanding.objects.all().filter(balance__lte = -1).aggregate(total = Sum('balance'))['total'] or 0)
+    return JsonResponse(data)   
+
+def product_helper(request) : 
+    #Get the set of categoires , companies , sizes for the products
+    categories = set()
+    companies = set()
+    sizes = set()
+    sizes = defaultdict(set)
+    products = Product.objects.all()
+    bases = defaultdict(set)
+    for product in products :
+        categories.add(product.category)
+        companies.add(product.company)
+        sizes[product.category].add(product.base)
+        bases[product.category].add(product.base)
+    data = {
+        "categories" : list(categories),
+        "companies" : list(companies),
+        # "sizes" : {cat : list(sizes[cat]) for cat in sizes.keys()}, 
+        "bases" : {cat : list(bases[cat]) for cat in bases.keys()}, 
+    }
+    return JsonResponse(data)
+        

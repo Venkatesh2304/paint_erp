@@ -1,7 +1,7 @@
 #Serialise Sales 
+import re
 from rest_framework import serializers
 from drf_writable_nested import WritableNestedModelSerializer
-
 from .models import * 
 
 class OutstandingSerializer(serializers.ModelSerializer):
@@ -48,10 +48,11 @@ class SupplierNameSerializer(serializers.ModelSerializer):
 
 class CustomerNameSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
-        return instance.name
+        return instance.name + "*" + str(instance.phone or "")
+    
     class Meta:
         model = Customer 
-        fields = ['name']
+        fields = ['name','phone']
 
 class ProductNameSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
@@ -62,11 +63,21 @@ class ProductNameSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     closing_stock = serializers.SerializerMethodField()
+    size_value = serializers.SerializerMethodField()
+    size_unit = serializers.SerializerMethodField()
     class Meta:
         model = Product 
-        fields = ["name","company","category","base","size","dpl","mrp","opening_stock","hsn","rt","closing_stock"]
+        fields = ["name","company","category","base","size_value","size_unit","size",
+                    "dpl","mrp","opening_stock","hsn","rt","closing_stock"]
+
     def get_closing_stock(self, obj):
         return obj.closing_stock()
+    
+    def get_size_value(self, obj):
+        return int(re.match(r"^\d+", obj.size).group() or 0) if obj.size else None
+
+    def get_size_unit(self, obj):
+        return re.search(r"[a-zA-Z. ]+",obj.size).group() if obj.size else None
     
 
 class SaleProductSerializer(serializers.ModelSerializer):
@@ -80,6 +91,7 @@ class SaleProductSerializer(serializers.ModelSerializer):
     def get_margin(self,obj) : 
         return round( (obj.price - obj.product.dpl) * 100 / obj.product.dpl,2) if obj.product.dpl else "0"
     
+
 class SalesSerializer(WritableNestedModelSerializer):
     products = SaleProductSerializer(many=True)
     class Meta:
