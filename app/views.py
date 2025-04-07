@@ -90,6 +90,8 @@ class SalesListView(viewsets.ModelViewSet):
     filterset_fields = {"bill_no" : ["exact","icontains"],"customer__name" : ["icontains"],"date":["exact","gte","lte"]}
     order_by = "__all__"
     ordering = ['-date','-bill_no']
+    lookup_field = 'bill_no'
+    lookup_value_regex = '.+'
 
     def perform_create(self, serializer):
         res = super().perform_create(serializer)
