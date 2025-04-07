@@ -41,11 +41,13 @@ class Product(models.Model):
 class Customer(models.Model):
     name = models.CharField(max_length=100, primary_key=True)
     gstin = models.CharField(max_length=100,null=True,blank=True)
+    referral = models.CharField(max_length=100,null=True,blank=True)
     phone = models.CharField(max_length=100,null=True,blank=True)
     address = models.TextField()
     city = models.CharField(max_length=100,default = "Trichy",db_default="Trichy")
     pincode = models.CharField(max_length=100,default = "620001",db_default="620001")
     opening_balance = models.FloatField(default=0,db_default=0)
+
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
@@ -77,13 +79,14 @@ class Sale(models.Model):
         return round(Sale.objects.filter(date__month=datetime.date.today().month).aggregate(models.Sum('amt'))['amt__sum'] or 0)
         
     def save(self, *args, **kwargs):
+        prefix = "FY25-26"
         if (not self.bill_no) or (self.bill_no == "TEMPORARY"):  # Generate only if not already set
             last_bill = Sale.objects.order_by('-bill_no').first()
             if last_bill:
-                last_number = int(last_bill.bill_no[1:])  # Extract number part
-                new_number = f"S{last_number + 1:05d}"  # Increment and format
+                last_number = int(last_bill.bill_no.split("/")[1])  # Extract number part
             else:
-                new_number = "S00001"  # First bill case
+                last_number = 61
+            new_number = f"{prefix}/{last_number + 1:05d}"  # Increment and format
             self.bill_no = new_number
             
         super().save(*args, **kwargs)
@@ -147,7 +150,7 @@ class SaleProduct(models.Model):
     product = models.ForeignKey(Product, on_delete=models.DO_NOTHING,related_name="sales")
     qty = models.IntegerField()
     price = models.FloatField(verbose_name="Sale Price / Unit")
-    color = models.IntegerField(verbose_name="Color",null=True,blank=True)
+    color = models.CharField(max_length=10,verbose_name="Color",null=True,blank=True)
     
     
 
@@ -238,11 +241,14 @@ class Outstanding(models.Model) :
         from django.db import connection
         with connection.cursor() as cursor:
             cursor.execute( 'DELETE FROM app_outstanding' )
+
             cursor.execute('''
                 INSERT INTO app_outstanding (customer, bill_no, balance, date)
                 SELECT customer_id as customer   , bill_no, SUM(amt) AS balance, MIN(date) AS date 
                 FROM (
                 SELECT customer_id , bill_no , date, -amt as amt  FROM app_sale
+                UNION ALL
+                SELECT name as customer_id ,  ('OP_BAL_' || name) as bill_no , '2025-04-01' as date , -opening_balance as amt from app_customer 
                 UNION ALL
                 SELECT customer_id, bill_id as bill_no , date, amt FROM (select app_collectionbillentry.amt as amt , * from app_collection join app_collectionbillentry on app_collection.id = app_collectionbillentry.collection_id)
                 ) 

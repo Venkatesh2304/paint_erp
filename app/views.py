@@ -30,7 +30,6 @@ class SupplierListView(viewsets.ModelViewSet):
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
 
-
 class CustomerListView(viewsets.ModelViewSet):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
@@ -50,8 +49,6 @@ class ProductNameListView(viewsets.ModelViewSet):
     serializer_class = ProductNameSerializer
     pagination_class = None
     
-
-
 class ProductListView(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
@@ -109,7 +106,8 @@ class SalesListView(viewsets.ModelViewSet):
         idx = 0
         errs = [{}] * len(products)
         for product in products.all():
-            if product.product.closing_stock() : 
+            print(product.product.closing_stock() , product.qty,product.product.name)
+            if (product.product.closing_stock() < 0): 
                 Sale.objects.get(bill_no = serializer.instance.bill_no).delete()
                 # errs[idx] = {"qty" : "Stock Not Available"}
                 raise ValidationError({'detail': f"Stock Not Available {product.product.name}"})
