@@ -133,8 +133,8 @@ class CollectionListView(viewsets.ModelViewSet):
 
 
 
-def download_invoice(request,bill) :
-
+def download_invoice(request) :
+    bill = request.GET.get('bill', '')
     sale = Sale.objects.get(bill_no=bill)
     taxes = defaultdict(lambda : 0)
     total_amt = 0

@@ -36,7 +36,7 @@ router.register(r'suppliername', SupplierNameListView, basename='supplier-list')
 
 urlpatterns = [
         path('', include(router.urls)),
-        path('invoice/<str:bill>', download_invoice),
+        path('invoice/', download_invoice),
         path('report/', report),
         path('dashboard/', dashboard),
         path('product_helper/', product_helper),
