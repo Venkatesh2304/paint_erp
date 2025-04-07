@@ -164,7 +164,7 @@ def download_invoice(request) :
             for idx,sp in enumerate(sale.products.all()) 
         ] + [{"name":"","hsn":"","qty":"","price":"","gst":"","amount":""}] * 3 ,
         "taxes" : [
-            {"taxable" : taxes[rt] , "rate" : rt , "cgst" : round(taxes[rt] * rt/200,2) , "sgst" : round(taxes[rt] * rt/200,2)}
+            {"taxable" : round(taxes[rt],2) , "rate" : round(rt) , "cgst" : round(taxes[rt] * rt/200,2) , "sgst" : round(taxes[rt] * rt/200,2)}
             for rt in taxes
         ],
         "total":  round(total_amt) , 

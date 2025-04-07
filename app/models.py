@@ -86,7 +86,7 @@ class Sale(models.Model):
                 last_number = int(last_bill.bill_no.split("/")[1])  # Extract number part
             else:
                 last_number = 61
-            new_number = f"{prefix}/{last_number + 1:05d}"  # Increment and format
+            new_number = f"{prefix}/{last_number + 1}"  # Increment and format
             self.bill_no = new_number
             
         super().save(*args, **kwargs)
